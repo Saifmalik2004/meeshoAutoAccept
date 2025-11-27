@@ -1,0 +1,32 @@
+name: Meesho Auto Accept
+
+on:
+  schedule:
+    - cron: "10 6 * * *"   # 12:10 PM IST = 06:40 UTC (adjust as needed)
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run automation
+        env:
+          MEESHO_EMAIL: ${{ secrets.MEESHO_EMAIL }}
+          MEESHO_PASSWORD: ${{ secrets.MEESHO_PASSWORD }}
+          MEESHO_URL: "https://supplier.meesho.com/panel/v3/new/root/login"
+        run: npm run meesho:run

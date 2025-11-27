@@ -1,0 +1,12 @@
+{
+  "name": "meesho-auto-accept",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "meesho:run": "node scripts/meesho.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "playwright": "^1.48.0"
+  }
+}
