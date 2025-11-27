@@ -2,7 +2,8 @@ name: Meesho Auto Accept
 
 on:
   schedule:
-    - cron: "10 6 * * *"   # 12:10 PM IST = 06:40 UTC (adjust as needed)
+    # 12:10 PM IST = 06:40 AM UTC
+    - cron: "40 6 * * *"
   workflow_dispatch:
 
 jobs:
@@ -30,3 +31,10 @@ jobs:
           MEESHO_PASSWORD: ${{ secrets.MEESHO_PASSWORD }}
           MEESHO_URL: "https://supplier.meesho.com/panel/v3/new/root/login"
         run: npm run meesho:run
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots

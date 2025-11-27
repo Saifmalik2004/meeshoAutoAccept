@@ -1,7 +1,14 @@
 require("dotenv").config();
+const fs = require("fs");
 const { chromium } = require("playwright");
 
 const TIMEOUT = 60_000;
+
+function ensureScreenshotsDir() {
+  if (!fs.existsSync("screenshots")) {
+    fs.mkdirSync("screenshots", { recursive: true });
+  }
+}
 
 async function safeClick(page, locator, what) {
   try {
@@ -40,22 +47,22 @@ async function safeCheck(page, locator, what) {
   }
 }
 
-
 async function dismissPopups(page, context = "") {
   console.log(`🧹 Trying to dismiss popups ${context ? "(" + context + ")" : ""}...`);
 
   try {
-    // Popup ko render hone ka thoda time
     await page.waitForTimeout(1500);
 
-    // 1) Skip wala overlay (span "Skip" inside div.css-gq3nwx)
-    const skipSpan = page.locator('span.MuiTypography-button:has-text("Skip")').first();
+    const skipSpan = page
+      .locator('span.MuiTypography-button:has-text("Skip")')
+      .first();
 
     if (await skipSpan.count()) {
       console.log("🔎 Found Skip span for popup");
 
-      // uska parent clickable div (css-gq3nwx) try karte hain
-      const skipContainer = skipSpan.locator('xpath=ancestor::div[contains(@class,"css-gq3nwx")]').first();
+      const skipContainer = skipSpan
+        .locator('xpath=ancestor::div[contains(@class,"css-gq3nwx")]')
+        .first();
       const target = (await skipContainer.count()) ? skipContainer : skipSpan;
 
       await safeClick(page, target, "Skip popup area");
@@ -63,7 +70,6 @@ async function dismissPopups(page, context = "") {
       return;
     }
 
-    // 2) X icon (close) svg with class css-1fmevri
     const closeSvg = page.locator("svg.css-1fmevri").first();
     if (await closeSvg.count()) {
       console.log("🔎 Found X close svg (css-1fmevri)");
@@ -73,7 +79,6 @@ async function dismissPopups(page, context = "") {
       return;
     }
 
-    // 3) Got it (e.g. "Accepted 3 orders – Got it")
     const gotItBtn = page.getByRole("button", { name: /got it/i });
     if (await gotItBtn.count()) {
       await safeClick(page, gotItBtn.first(), "Got it button");
@@ -87,26 +92,38 @@ async function dismissPopups(page, context = "") {
   }
 }
 
-
 async function runMeeshoFlow() {
   const MEESHO_EMAIL = process.env.MEESHO_EMAIL;
   const MEESHO_PASSWORD = process.env.MEESHO_PASSWORD;
-  const MEESHO_URL = process.env.MEESHO_URL || "https://supplier.meesho.com/panel/v3/new/root/login";
+  const MEESHO_URL =
+    process.env.MEESHO_URL ||
+    "https://supplier.meesho.com/panel/v3/new/root/login";
 
   if (!MEESHO_EMAIL || !MEESHO_PASSWORD) {
     throw new Error("MEESHO_EMAIL or MEESHO_PASSWORD env var missing");
   }
 
+  const isCI = process.env.CI === "true";
   console.log("🌐 Starting Meesho automation...");
   console.log("URL:", MEESHO_URL);
+  console.log("CI mode:", isCI ? "✅ yes (headless)" : "❌ no (debug mode)");
 
- const browser = await chromium.launch({
-  headless: process.env.CI ? true : false, // CI me true, local pe false rakh sakta hai
-  slowMo: process.env.CI ? 0 : 200,
-});
+  const browser = await chromium.launch({
+    headless: isCI ? true : false,
+    slowMo: isCI ? 0 : 200,
+  });
 
-  const page = await browser.newPage();
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "Chrome/120.0.0.0 Safari/537.36",
+  });
+
+  const page = await context.newPage();
   page.setDefaultTimeout(TIMEOUT);
+
+  ensureScreenshotsDir();
 
   try {
     // 1) Open login page
@@ -121,16 +138,58 @@ async function runMeeshoFlow() {
 
     console.log("📍 Current URL after goto:", page.url());
 
-    console.log("🔎 Waiting for email field...");
-    await page.waitForSelector('input[name="emailOrPhone"]', {
-      state: "visible",
-      timeout: TIMEOUT,
+    // debug: CI pe page kaisa dikhta hai
+    await page.screenshot({
+      path: "screenshots/01-login-page.png",
+      fullPage: true,
     });
+
+    // Thoda extra wait so that dynamic content loads
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
+      () => {}
+    );
+
+    console.log("🔎 Waiting for email field...");
+
+    const emailInput = page
+      .locator(
+        [
+          'input[name="emailOrPhone"]',
+          'input[type="email"]',
+          'input[placeholder*="Email"]',
+          'input[placeholder*="email"]',
+        ].join(", ")
+      )
+      .first();
+
+    try {
+      await emailInput.waitFor({ state: "visible", timeout: TIMEOUT });
+    } catch (e) {
+      console.error("❌ Email field not visible within timeout.");
+      const html = await page.content();
+      console.error("📄 HTML snippet (first 2000 chars):");
+      console.error(html.slice(0, 2000));
+      await page.screenshot({
+        path: "screenshots/02-email-timeout.png",
+        fullPage: true,
+      });
+      throw e;
+    }
 
     console.log("✍️ Filling email and password...");
 
-    const emailInput = page.locator('input[name="emailOrPhone"]');
-    const passwordInput = page.locator('input[name="password"]');
+    const passwordInput = page
+      .locator(
+        [
+          'input[name="password"]',
+          'input[type="password"]',
+          'input[placeholder*="Password"]',
+          'input[placeholder*="password"]',
+        ].join(", ")
+      )
+      .first();
+
+    await passwordInput.waitFor({ state: "visible", timeout: TIMEOUT });
 
     await emailInput.fill(MEESHO_EMAIL);
     await passwordInput.fill(MEESHO_PASSWORD);
@@ -139,18 +198,20 @@ async function runMeeshoFlow() {
     await safeClick(page, loginButton, "Login button");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
+      () => {}
+    );
+
     console.log("✅ Logged in, waiting for dashboard...");
     await page.screenshot({
-      path: "screenshots/after-login.png",
+      path: "screenshots/03-after-login.png",
       fullPage: true,
     });
 
     // 2) Wait for Pending Orders card and click it
     console.log("⏳ Waiting for Pending Orders card...");
 
-    const pendingOrdersCard = page
-      .locator('p:has-text("Pending Orders")')
-      .first();
+    const pendingOrdersCard = page.locator('p:has-text("Pending Orders")').first();
 
     await pendingOrdersCard.waitFor({
       state: "visible",
@@ -166,10 +227,12 @@ async function runMeeshoFlow() {
     await safeClick(page, pendingOrdersBox, "Pending Orders card");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
+      () => {}
+    );
     console.log("📄 Pending Orders page opened");
 
-    // // 3) Close popup (Returnless Refunds) if it appears
-     await dismissPopups(page);
+    await dismissPopups(page, "Pending Orders page");
 
     // 4) Wait a bit for table to render
     await page.waitForTimeout(2000);
@@ -194,15 +257,24 @@ async function runMeeshoFlow() {
     await safeClick(page, confirmAcceptButton, "Confirm Accept Order button");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
+      () => {}
+    );
 
     console.log(
       "🎉 Flow completed – pending orders accepted (jo selected the)."
     );
+
+    await page.screenshot({
+      path: "screenshots/04-after-accept.png",
+      fullPage: true,
+    });
   } catch (err) {
     console.error("💥 Meesho flow failed:", err);
     process.exitCode = 1;
   } finally {
     await page.close();
+    await context.close();
     await browser.close();
   }
 }
