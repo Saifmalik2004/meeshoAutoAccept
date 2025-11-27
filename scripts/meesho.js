@@ -10,6 +10,21 @@ function ensureScreenshotsDir() {
   }
 }
 
+// 🔹 Screenshot helper: fail ho to script MAT todo
+async function safeScreenshot(page, path, what = "") {
+  try {
+    ensureScreenshotsDir();
+    await page.screenshot({
+      path,
+      fullPage: true,
+    });
+    console.log(`📸 Screenshot saved: ${path} ${what ? `(${what})` : ""}`);
+  } catch (e) {
+    console.warn(`⚠️ Screenshot failed at ${path}. Continuing without it...`);
+    console.warn(e);
+  }
+}
+
 async function safeClick(page, locator, what) {
   try {
     await locator.waitFor({ state: "visible", timeout: TIMEOUT });
@@ -106,11 +121,16 @@ async function runMeeshoFlow() {
   const isCI = process.env.CI === "true";
   console.log("🌐 Starting Meesho automation...");
   console.log("URL:", MEESHO_URL);
-  console.log("CI mode:", isCI ? "✅ yes (headless)" : "❌ no (debug mode)");
+  console.log("CI mode:", isCI ? "✅ yes (headed via Xvfb)" : "❌ no (local debug)");
 
   const browser = await chromium.launch({
-    headless: false,
+    headless: false,          // 👉 hamesha headed (CI me xvfb-run use ho raha hai)
     slowMo: isCI ? 0 : 200,
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
 
   const context = await browser.newContext({
@@ -139,15 +159,12 @@ async function runMeeshoFlow() {
     console.log("📍 Current URL after goto:", page.url());
 
     // debug: CI pe page kaisa dikhta hai
-    await page.screenshot({
-      path: "screenshots/01-login-page.png",
-      fullPage: true,
-    });
+    await safeScreenshot(page, "screenshots/01-login-page.png", "login page");
 
     // Thoda extra wait so that dynamic content loads
-    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
-      () => {}
-    );
+    await page
+      .waitForLoadState("networkidle", { timeout: TIMEOUT })
+      .catch(() => {});
 
     console.log("🔎 Waiting for email field...");
 
@@ -169,10 +186,7 @@ async function runMeeshoFlow() {
       const html = await page.content();
       console.error("📄 HTML snippet (first 2000 chars):");
       console.error(html.slice(0, 2000));
-      await page.screenshot({
-        path: "screenshots/02-email-timeout.png",
-        fullPage: true,
-      });
+      await safeScreenshot(page, "screenshots/02-email-timeout.png", "email timeout");
       throw e;
     }
 
@@ -198,20 +212,19 @@ async function runMeeshoFlow() {
     await safeClick(page, loginButton, "Login button");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
-    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
-      () => {}
-    );
+    await page
+      .waitForLoadState("networkidle", { timeout: TIMEOUT })
+      .catch(() => {});
 
     console.log("✅ Logged in, waiting for dashboard...");
-    await page.screenshot({
-      path: "screenshots/03-after-login.png",
-      fullPage: true,
-    });
+    await safeScreenshot(page, "screenshots/03-after-login.png", "after login");
 
     // 2) Wait for Pending Orders card and click it
     console.log("⏳ Waiting for Pending Orders card...");
 
-    const pendingOrdersCard = page.locator('p:has-text("Pending Orders")').first();
+    const pendingOrdersCard = page
+      .locator('p:has-text("Pending Orders")')
+      .first();
 
     await pendingOrdersCard.waitFor({
       state: "visible",
@@ -227,9 +240,9 @@ async function runMeeshoFlow() {
     await safeClick(page, pendingOrdersBox, "Pending Orders card");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
-    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
-      () => {}
-    );
+    await page
+      .waitForLoadState("networkidle", { timeout: TIMEOUT })
+      .catch(() => {});
     console.log("📄 Pending Orders page opened");
 
     await dismissPopups(page, "Pending Orders page");
@@ -257,18 +270,15 @@ async function runMeeshoFlow() {
     await safeClick(page, confirmAcceptButton, "Confirm Accept Order button");
 
     await page.waitForLoadState("domcontentloaded", { timeout: TIMEOUT });
-    await page.waitForLoadState("networkidle", { timeout: TIMEOUT }).catch(
-      () => {}
-    );
+    await page
+      .waitForLoadState("networkidle", { timeout: TIMEOUT })
+      .catch(() => {});
 
     console.log(
       "🎉 Flow completed – pending orders accepted (jo selected the)."
     );
 
-    await page.screenshot({
-      path: "screenshots/04-after-accept.png",
-      fullPage: true,
-    });
+    await safeScreenshot(page, "screenshots/04-after-accept.png", "after accept");
   } catch (err) {
     console.error("💥 Meesho flow failed:", err);
     process.exitCode = 1;
