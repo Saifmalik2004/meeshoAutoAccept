@@ -109,7 +109,7 @@ async function runMeeshoFlow() {
   console.log("CI mode:", isCI ? "✅ yes (headless)" : "❌ no (debug mode)");
 
   const browser = await chromium.launch({
-    headless: isCI ? true : false,
+    headless: false,
     slowMo: isCI ? 0 : 200,
   });
 
