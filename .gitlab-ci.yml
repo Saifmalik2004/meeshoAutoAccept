@@ -1,0 +1,27 @@
+stages:
+  - test
+
+meesho_auto_accept:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.48.0-jammy
+  # ↑ is image me Node + Playwright + browsers sab pre-installed hote hain
+
+  script:
+    - echo "📦 Installing dependencies..."
+    - npm install
+    # agar tumne playwright install nahi kara to ye extra safety (usually image me hota hi hai)
+    - npx playwright install chromium
+    - echo "🚀 Running Meesho auto-accept script..."
+    - npm run meesho:run
+
+  variables:
+    # yaha se MEESHO_* GitLab CI/CD Variables se pick honge
+    MEESHO_EMAIL: "$MEESHO_EMAIL"
+    MEESHO_PASSWORD: "$MEESHO_PASSWORD"
+    MEESHO_URL: "https://supplier.meesho.com/panel/v3/new/root/login"
+    # Playwright ko display ki jarurat nahi kyunki hum official image use kar rahe
+    # agar custom image use karoge to DISPLAY / xvfb ki zarurat padegi
+
+  only:
+    - schedules
+    - manual
