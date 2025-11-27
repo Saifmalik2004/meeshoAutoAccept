@@ -40,8 +40,7 @@ async function safeCheck(page, locator, what) {
   }
 }
 
-// 👇 Popup close helper (X svg in "Introducing Returnless Refunds" dialog)
-// 👇 Popup close helper (Skip / X svg / Got it)
+
 async function dismissPopups(page, context = "") {
   console.log(`🧹 Trying to dismiss popups ${context ? "(" + context + ")" : ""}...`);
 
@@ -92,7 +91,7 @@ async function dismissPopups(page, context = "") {
 async function runMeeshoFlow() {
   const MEESHO_EMAIL = process.env.MEESHO_EMAIL;
   const MEESHO_PASSWORD = process.env.MEESHO_PASSWORD;
-  const MEESHO_URL = process.env.MEESHO_URL || "https://supplier.meesho.com/";
+  const MEESHO_URL = process.env.MEESHO_URL || "https://supplier.meesho.com/panel/v3/new/root/login";
 
   if (!MEESHO_EMAIL || !MEESHO_PASSWORD) {
     throw new Error("MEESHO_EMAIL or MEESHO_PASSWORD env var missing");
@@ -101,10 +100,11 @@ async function runMeeshoFlow() {
   console.log("🌐 Starting Meesho automation...");
   console.log("URL:", MEESHO_URL);
 
-  const browser = await chromium.launch({
-    headless: false, // debug ke liye abhi false; final me true kar sakta hai
-    slowMo: 200,
-  });
+ const browser = await chromium.launch({
+  headless: process.env.CI ? true : false, // CI me true, local pe false rakh sakta hai
+  slowMo: process.env.CI ? 0 : 200,
+});
+
   const page = await browser.newPage();
   page.setDefaultTimeout(TIMEOUT);
 
