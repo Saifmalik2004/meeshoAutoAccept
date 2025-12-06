@@ -385,9 +385,10 @@ async function runMeeshoFlow() {
   console.log("URL:", MEESHO_URL);
 
   const browser = await chromium.launch({
-    headless: false, // CI me true kar sakta hai
-    slowMo: 200,
-  });
+  headless: process.env.CI ? true : false, // CI me true, local me false
+  slowMo: process.env.CI ? 0 : 200,        // CI me fast, local me slow
+});
+
   const page = await browser.newPage();
   page.setDefaultTimeout(TIMEOUT);
 
