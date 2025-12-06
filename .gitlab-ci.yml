@@ -1,27 +1,31 @@
 stages:
-  - test
+  - meesho
 
 meesho_auto_accept:
-  stage: test
+  stage: meesho
   image: mcr.microsoft.com/playwright:v1.48.0-jammy
-  # ↑ is image me Node + Playwright + browsers sab pre-installed hote hain
 
   script:
     - echo "📦 Installing dependencies..."
-    - npm install
-    # agar tumne playwright install nahi kara to ye extra safety (usually image me hota hi hai)
+    - npm ci || npm install
+    - echo "🧩 Ensuring Playwright Chromium is installed..."
     - npx playwright install chromium
-    - echo "🚀 Running Meesho auto-accept script..."
+    - echo "🚀 Running Meesho auto-accept + label download..."
     - npm run meesho:run
 
   variables:
-    # yaha se MEESHO_* GitLab CI/CD Variables se pick honge
     MEESHO_EMAIL: "$MEESHO_EMAIL"
     MEESHO_PASSWORD: "$MEESHO_PASSWORD"
-    MEESHO_URL: "https://supplier.meesho.com/panel/v3/new/root/login"
-    # Playwright ko display ki jarurat nahi kyunki hum official image use kar rahe
-    # agar custom image use karoge to DISPLAY / xvfb ki zarurat padegi
+    MEESHO_URL: "https://supplier.meesho.com/"
 
-  only:
-    - schedules
-    - manual
+  artifacts:
+    when: always
+    paths:
+      - labels/
+    expire_in: 7 days
+
+  rules:
+    # 1) Schedule se chale
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    # 2) Manual "Run pipeline" se bhi chale (test ke time)
+    - if: '$CI_PIPELINE_SOURCE == "web"'
